@@ -7,6 +7,288 @@ import subprocess
 import re
 import time
 import requests
+import os
+import json
+
+class AyarlarPenceresi:
+    """Ngrok token ve diğer ayarları yöneten pencere"""
+    def __init__(self, parent):
+        self.pencere = tk.Toplevel(parent)
+        self.pencere.title("⚙️ Ayarlar")
+        self.pencere.geometry("600x500")
+        self.pencere.configure(bg='#2c3e50')
+        self.pencere.resizable(False, False)
+        
+        # Ana frame
+        main_frame = tk.Frame(self.pencere, bg='#2c3e50', padx=30, pady=20)
+        main_frame.pack(fill='both', expand=True)
+        
+        # Başlık
+        baslik = tk.Label(main_frame, 
+                         text="⚙️ Uygulama Ayarları",
+                         font=('Arial', 18, 'bold'),
+                         bg='#2c3e50', fg='white')
+        baslik.pack(pady=(0, 20))
+        
+        # Ngrok Token Bölümü
+        token_frame = tk.LabelFrame(main_frame,
+                                    text="  🔑 Ngrok Auth Token  ",
+                                    font=('Arial', 11, 'bold'),
+                                    bg='#2c3e50', fg='#3498db',
+                                    padx=20, pady=15)
+        token_frame.pack(fill='x', pady=10)
+        
+        tk.Label(token_frame,
+                text="Token'ınızı https://dashboard.ngrok.com/get-started/your-authtoken\nadresinden alabilirsiniz.",
+                font=('Arial', 9),
+                bg='#2c3e50', fg='#bdc3c7',
+                justify='left').pack(anchor='w', pady=(0, 10))
+        
+        # Token girişi
+        token_giris_frame = tk.Frame(token_frame, bg='#2c3e50')
+        token_giris_frame.pack(fill='x', pady=5)
+        
+        self.token_entry = tk.Entry(token_giris_frame,
+                                    font=('Courier', 10),
+                                    bg='#34495e', fg='white',
+                                    insertbackground='white',
+                                    show='*',
+                                    relief='flat')
+        self.token_entry.pack(side='left', fill='x', expand=True, ipady=8)
+        
+        # Token'ı göster/gizle butonu
+        self.goster_btn = tk.Button(token_giris_frame,
+                                    text="👁️",
+                                    font=('Arial', 10),
+                                    bg='#34495e', fg='white',
+                                    command=self.token_goster_gizle,
+                                    cursor='hand2',
+                                    width=3)
+        self.goster_btn.pack(side='right', padx=(5, 0))
+        
+        # Mevcut token'ı yükle
+        current_token = self.token_oku()
+        if current_token:
+            self.token_entry.insert(0, current_token)
+            tk.Label(token_frame,
+                    text="✅ Token kaydedilmiş",
+                    font=('Arial', 9),
+                    bg='#2c3e50', fg='#2ecc71').pack(anchor='w', pady=(5, 0))
+        
+        # Token kaydet butonu
+        self.token_kaydet_btn = tk.Button(token_frame,
+                                         text="💾 Token'ı Kaydet",
+                                         font=('Arial', 11, 'bold'),
+                                         bg='#27ae60', fg='white',
+                                         command=self.token_kaydet,
+                                         cursor='hand2',
+                                         height=2)
+        self.token_kaydet_btn.pack(fill='x', pady=(10, 5))
+        
+        # Ses Ayarları Bölümü
+        ses_frame = tk.LabelFrame(main_frame,
+                                 text="  🎤 Ses Ayarları  ",
+                                 font=('Arial', 11, 'bold'),
+                                 bg='#2c3e50', fg='#e74c3c',
+                                 padx=20, pady=15)
+        ses_frame.pack(fill='x', pady=10)
+        
+        # Ses kalitesi
+        tk.Label(ses_frame,
+                text="Ses Kalitesi (Sample Rate):",
+                font=('Arial', 10),
+                bg='#2c3e50', fg='#ecf0f1').pack(anchor='w', pady=(0, 5))
+        
+        self.kalite_var = tk.StringVar(value="44100")
+        kalite_frame = tk.Frame(ses_frame, bg='#2c3e50')
+        kalite_frame.pack(fill='x', pady=(0, 10))
+        
+        for rate, label in [("22050", "Düşük (22kHz)"), ("44100", "Normal (44kHz)"), ("48000", "Yüksek (48kHz)")]:
+            tk.Radiobutton(kalite_frame,
+                          text=label,
+                          variable=self.kalite_var,
+                          value=rate,
+                          font=('Arial', 9),
+                          bg='#2c3e50', fg='white',
+                          selectcolor='#34495e',
+                          activebackground='#2c3e50',
+                          activeforeground='white').pack(anchor='w')
+        
+        # Test Bölümü
+        test_frame = tk.LabelFrame(main_frame,
+                                  text="  🧪 Test  ",
+                                  font=('Arial', 11, 'bold'),
+                                  bg='#2c3e50', fg='#f39c12',
+                                  padx=20, pady=15)
+        test_frame.pack(fill='x', pady=10)
+        
+        tk.Button(test_frame,
+                 text="🎤 Mikrofon Testi",
+                 font=('Arial', 10, 'bold'),
+                 bg='#f39c12', fg='white',
+                 command=self.mikrofon_test,
+                 cursor='hand2').pack(fill='x', pady=5)
+        
+        # Butonlar
+        buton_frame = tk.Frame(main_frame, bg='#2c3e50')
+        buton_frame.pack(pady=(20, 0))
+        
+        tk.Button(buton_frame,
+                 text="Kaydet ve Kapat",
+                 font=('Arial', 11, 'bold'),
+                 bg='#3498db', fg='white',
+                 command=self.kaydet_kapat,
+                 cursor='hand2',
+                 width=15).pack(side='left', padx=5)
+        
+        tk.Button(buton_frame,
+                 text="İptal",
+                 font=('Arial', 11),
+                 bg='#95a5a6', fg='white',
+                 command=self.pencere.destroy,
+                 cursor='hand2',
+                 width=15).pack(side='left', padx=5)
+        
+        # Pencereyi ortala
+        self.pencere.transient(parent)
+        self.pencere.grab_set()
+        self.token_gizli = True
+    
+    def token_goster_gizle(self):
+        """Token'ı göster/gizle"""
+        if self.token_gizli:
+            self.token_entry.config(show='')
+            self.goster_btn.config(text='🙈')
+            self.token_gizli = False
+        else:
+            self.token_entry.config(show='*')
+            self.goster_btn.config(text='👁️')
+            self.token_gizli = True
+    
+    def token_oku(self):
+        """Kaydedilmiş token'ı oku"""
+        config_file = os.path.expanduser("~/.voice_chat_config.json")
+        try:
+            if os.path.exists(config_file):
+                with open(config_file, 'r') as f:
+                    config = json.load(f)
+                    return config.get('ngrok_token', '')
+        except:
+            pass
+        return ''
+    
+    def token_kaydet(self):
+        """Token'ı kaydet ve ngrok'a ekle"""
+        token = self.token_entry.get().strip()
+        
+        if not token:
+            messagebox.showwarning("Uyarı", "Lütfen token giriniz!")
+            return
+        
+        try:
+            # Config dosyasına kaydet
+            config_file = os.path.expanduser("~/.voice_chat_config.json")
+            config = {'ngrok_token': token, 'sample_rate': self.kalite_var.get()}
+            
+            with open(config_file, 'w') as f:
+                json.dump(config, f)
+            
+            # Ngrok'a token'ı ekle
+            result = subprocess.run(['ngrok', 'config', 'add-authtoken', token],
+                                   capture_output=True, text=True)
+            
+            if result.returncode == 0:
+                messagebox.showinfo("Başarılı", 
+                    "✅ Token başarıyla kaydedildi!\n\n"
+                    "Artık ngrok sunucusunu başlatabilirsiniz.")
+            else:
+                messagebox.showerror("Hata", 
+                    f"Token kaydedilemedi:\n{result.stderr}\n\n"
+                    "Ngrok yüklü mü?")
+                
+        except FileNotFoundError:
+            messagebox.showerror("Ngrok Bulunamadı",
+                "Ngrok yüklü değil!\n\n"
+                "Kurulum: https://ngrok.com/download")
+        except Exception as e:
+            messagebox.showerror("Hata", f"Beklenmeyen hata:\n{e}")
+    
+    def mikrofon_test(self):
+        """Mikrofon testi yap"""
+        messagebox.showinfo("Mikrofon Testi",
+            "🎤 Mikrofon testi başlıyor...\n\n"
+            "Konuşun, sesinizi duyabileceksiniz.\n"
+            "Pencereyi kapatınca test sonlanır.")
+        
+        # Test penceresi
+        test_win = tk.Toplevel(self.pencere)
+        test_win.title("🎤 Mikrofon Test")
+        test_win.geometry("300x150")
+        test_win.configure(bg='#2c3e50')
+        
+        tk.Label(test_win,
+                text="🎤 Konuşun...",
+                font=('Arial', 14, 'bold'),
+                bg='#2c3e50', fg='#2ecc71').pack(expand=True)
+        
+        tk.Button(test_win,
+                 text="Testi Durdur",
+                 font=('Arial', 11, 'bold'),
+                 bg='#e74c3c', fg='white',
+                 command=test_win.destroy,
+                 cursor='hand2').pack(pady=10)
+        
+        # Basit echo testi thread'i
+        def test_echo():
+            try:
+                import pyaudio
+                audio = pyaudio.PyAudio()
+                
+                stream_in = audio.open(format=pyaudio.paInt16,
+                                      channels=1,
+                                      rate=int(self.kalite_var.get()),
+                                      input=True,
+                                      frames_per_buffer=1024)
+                
+                stream_out = audio.open(format=pyaudio.paInt16,
+                                       channels=1,
+                                       rate=int(self.kalite_var.get()),
+                                       output=True,
+                                       frames_per_buffer=1024)
+                
+                while test_win.winfo_exists():
+                    data = stream_in.read(1024, exception_on_overflow=False)
+                    stream_out.write(data)
+                
+                stream_in.stop_stream()
+                stream_in.close()
+                stream_out.stop_stream()
+                stream_out.close()
+                audio.terminate()
+            except:
+                pass
+        
+        threading.Thread(target=test_echo, daemon=True).start()
+    
+    def kaydet_kapat(self):
+        """Ayarları kaydet ve kapat"""
+        config_file = os.path.expanduser("~/.voice_chat_config.json")
+        try:
+            config = {'sample_rate': self.kalite_var.get()}
+            
+            # Mevcut token varsa koru
+            token = self.token_entry.get().strip()
+            if token:
+                config['ngrok_token'] = token
+            
+            with open(config_file, 'w') as f:
+                json.dump(config, f)
+            
+            messagebox.showinfo("Başarılı", "Ayarlar kaydedildi!")
+            self.pencere.destroy()
+        except Exception as e:
+            messagebox.showerror("Hata", f"Ayarlar kaydedilemedi:\n{e}")
+
 
 class BaglantiPenceresi:
     """Ngrok bağlantı bilgilerini gösteren popup pencere"""
@@ -174,7 +456,7 @@ class SesliKonusmaUygulamasi:
         self.CHUNK = 1024
         self.FORMAT = pyaudio.paInt16
         self.CHANNELS = 1
-        self.RATE = 44100
+        self.RATE = self.ayarlardan_rate_al()
         
         # PyAudio başlat
         self.audio = pyaudio.PyAudio()
@@ -193,13 +475,36 @@ class SesliKonusmaUygulamasi:
         # GUI oluştur
         self.pencere_olustur()
     
+    def ayarlardan_rate_al(self):
+        """Kaydedilmiş ses kalitesini oku"""
+        config_file = os.path.expanduser("~/.voice_chat_config.json")
+        try:
+            if os.path.exists(config_file):
+                with open(config_file, 'r') as f:
+                    config = json.load(f)
+                    return int(config.get('sample_rate', 44100))
+        except:
+            pass
+        return 44100
+    
     def pencere_olustur(self):
         """Ana pencereyi oluştur"""
         self.root = tk.Tk()
         self.root.title("🎙️ Sesli Konuşma Uygulaması")
-        self.root.geometry("550x700")
+        self.root.geometry("600x750")
         self.root.configure(bg='#2c3e50')
         self.root.resizable(False, False)
+        
+        # Menü çubuğu
+        menubar = tk.Menu(self.root)
+        self.root.config(menu=menubar)
+        
+        ayarlar_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="⚙️ Ayarlar", menu=ayarlar_menu)
+        ayarlar_menu.add_command(label="Ngrok Token", command=self.ayarlar_ac)
+        ayarlar_menu.add_command(label="Ses Ayarları", command=self.ayarlar_ac)
+        ayarlar_menu.add_separator()
+        ayarlar_menu.add_command(label="Çıkış", command=self.kapat)
         
         # Başlık
         baslik_frame = tk.Frame(self.root, bg='#34495e', pady=15)
@@ -215,6 +520,17 @@ class SesliKonusmaUygulamasi:
                 text="İnternet üzerinden gerçek zamanlı ses iletişimi",
                 font=('Arial', 9),
                 bg='#34495e', fg='#bdc3c7').pack()
+        
+        # Ayarlar butonu (sağ üstte)
+        ayar_btn = tk.Button(baslik_frame,
+                            text="⚙️",
+                            font=('Arial', 14),
+                            bg='#34495e', fg='white',
+                            command=self.ayarlar_ac,
+                            cursor='hand2',
+                            relief='flat',
+                            width=3)
+        ayar_btn.place(relx=0.95, rely=0.5, anchor='e')
         
         # Sunucu bölümü
         sunucu_frame = tk.LabelFrame(self.root, 
@@ -269,7 +585,7 @@ class SesliKonusmaUygulamasi:
                                 bg='#34495e', fg='white',
                                 insertbackground='white',
                                 relief='flat',
-                                width=30)
+                                width=35)
         self.ip_entry.pack(side='left', ipady=5)
         self.ip_entry.insert(0, "0.tcp.ngrok.io")
         
@@ -286,7 +602,7 @@ class SesliKonusmaUygulamasi:
                                    bg='#34495e', fg='white',
                                    insertbackground='white',
                                    relief='flat',
-                                   width=30)
+                                   width=35)
         self.port_entry.pack(side='left', ipady=5)
         self.port_entry.insert(0, "12345")
         
@@ -314,322 +630,181 @@ class SesliKonusmaUygulamasi:
                                     font=('Arial', 13, 'bold'))
         self.durum_label.pack(pady=(5, 0))
         
-        # Kes butonu
-        self.kes_btn = tk.Button(self.root, 
-                                text="❌ Bağlantıyı Kes",
-                                command=self.baglanti_kes,
-                                bg='#e74c3c', fg='white',
-                                font=('Arial', 11, 'bold'),
-                                cursor='hand2',
-                                height=2,
-                                state='disabled')
-        self.kes_btn.pack(pady=10, padx=20, fill='x')
+        ip_giris_frame.pack(fill='x', pady=5)
         
-        # Log alanı
-        log_frame = tk.LabelFrame(self.root,
-                                 text="  📋 Sistem Logları  ",
-                                 font=('Arial', 10, 'bold'),
-                                 bg='#2c3e50', fg='#95a5a6',
-                                 padx=10, pady=10)
-        log_frame.pack(pady=10, padx=20, fill='both', expand=True)
+        tk.Label(ip_giris_frame,
+                text="Sunucu Adresi (örnek: 0.tcp.ngrok.io:12345)",
+                font=('Arial', 9),
+                bg='#2c3e50', fg='#ecf0f1').pack(anchor='w', pady=(0,5))
         
-        self.log_text = scrolledtext.ScrolledText(log_frame, 
-                                                   height=8,
-                                                   bg='#1a1a1a',
-                                                   fg='#00ff00',
-                                                   font=('Courier', 9),
-                                                   relief='flat')
-        self.log_text.pack(fill='both', expand=True)
+        self.ip_entry = tk.Entry(ip_giris_frame,
+                                font=('Courier', 11),
+                                bg='#34495e', fg='white',
+                                insertbackground='white',
+                                relief='flat')
+        self.ip_entry.pack(fill='x', ipady=8)
+
+        # Bağlan butonu
+        self.baglan_btn = tk.Button(istemci_frame,
+                                    text="🔗 Bağlan",
+                                    font=('Arial', 12, 'bold'),
+                                    bg='#27ae60', fg='white',
+                                    cursor='hand2',
+                                    height=2,
+                                    command=self.baglan)
+        self.baglan_btn.pack(fill='x', pady=(10,5))
         
-        self.log_ekle("✅ Uygulama başlatıldı")
-        self.log_ekle("ℹ️  Ngrok ile sunucu başlatın veya bir adrese bağlanın")
-    
-    def log_ekle(self, mesaj):
-        """Log mesajı ekle"""
-        import datetime
-        zaman = datetime.datetime.now().strftime("%H:%M:%S")
-        self.log_text.insert(tk.END, f"[{zaman}] {mesaj}\n")
-        self.log_text.see(tk.END)
-    
-    def ngrok_ile_baslat(self):
-        """Ngrok ile sunucu başlat"""
-        try:
-            port = 5000  # Sabit port kullan
-            
-            self.log_ekle("🚀 Ngrok başlatılıyor...")
-            self.durum_label.config(text="🟡 Ngrok başlatılıyor...", fg='#f39c12')
-            
-            # Önce yerel sunucuyu başlat
-            self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            self.server_socket.bind(('0.0.0.0', port))
-            self.server_socket.listen(1)
-            
-            self.log_ekle(f"✅ Yerel sunucu başlatıldı - Port: {port}")
-            
-            # Ngrok'u başlat
-            try:
-                self.ngrok_process = subprocess.Popen(
-                    ['ngrok', 'tcp', str(port)],
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE
-                )
-                
-                self.log_ekle("⏳ Ngrok URL'i alınıyor...")
-                
-                # Butonları devre dışı bırak
-                self.ngrok_btn.config(state='disabled')
-                self.baglan_btn.config(state='disabled')
-                
-                # Ngrok URL'ini al ve popup göster
-                threading.Thread(target=self.ngrok_url_al_ve_goster, daemon=True).start()
-                
-                # Bağlantı bekle
-                threading.Thread(target=self.baglanti_kabul_et, daemon=True).start()
-                
-            except FileNotFoundError:
-                messagebox.showerror("Ngrok Bulunamadı", 
-                    "Ngrok yüklü değil!\n\n"
-                    "Kurulum Adımları:\n"
-                    "1. https://ngrok.com/download\n"
-                    "2. Üye olun ve auth token alın\n"
-                    "3. ngrok config add-authtoken <TOKEN>\n"
-                    "4. Ngrok'u PATH'e ekleyin")
-                self.log_ekle("❌ Ngrok bulunamadı!")
-                self.durum_label.config(text="⚪ Beklemede", fg='#ecf0f1')
-                if self.server_socket:
-                    self.server_socket.close()
-                self.ngrok_btn.config(state='normal')
-                self.baglan_btn.config(state='normal')
-                
-        except Exception as e:
-            messagebox.showerror("Hata", f"Sunucu başlatılamadı:\n{e}")
-            self.log_ekle(f"❌ Hata: {e}")
-            self.durum_label.config(text="⚪ Beklemede", fg='#ecf0f1')
-            self.ngrok_btn.config(state='normal')
-            self.baglan_btn.config(state='normal')
-    
-    def ngrok_url_al_ve_goster(self):
-        """Ngrok URL'ini al ve popup pencerede göster"""
-        max_deneme = 15
-        for i in range(max_deneme):
-            try:
-                time.sleep(2)
-                response = requests.get('http://localhost:4040/api/tunnels', timeout=5)
-                data = response.json()
-                
-                if data.get('tunnels') and len(data['tunnels']) > 0:
-                    tunnel_url = data['tunnels'][0]['public_url']
-                    match = re.search(r'tcp://(.+):(\d+)', tunnel_url)
-                    
-                    if match:
-                        host = match.group(1)
-                        port = match.group(2)
-                        
-                        self.log_ekle("=" * 50)
-                        self.log_ekle(f"🎉 Ngrok Başarıyla Başlatıldı!")
-                        self.log_ekle(f"📍 IP: {host}")
-                        self.log_ekle(f"📍 Port: {port}")
-                        self.log_ekle("=" * 50)
-                        
-                        self.durum_label.config(
-                            text="🟡 Bağlantı Bekleniyor...", 
-                            fg='#f39c12'
-                        )
-                        
-                        # Popup pencereyi göster
-                        self.root.after(0, lambda: BaglantiPenceresi(self.root, host, port))
-                        return
-                        
-            except Exception as e:
-                if i == max_deneme - 1:
-                    self.log_ekle(f"⚠️ Ngrok URL alınamadı: {e}")
-                    self.log_ekle("💡 localhost:4040'ta kontrol edin")
+        # Bağlantı durumu
+        self.durum_label = tk.Label(istemci_frame,
+                                    text="Durum: Bağlı değil ❌",
+                                    font=('Arial', 9, 'italic'),
+                                    bg='#2c3e50', fg='#e74c3c')
+        self.durum_label.pack(pady=(5,0))
         
-        self.log_ekle("⚠️ Ngrok URL otomatik alınamadı")
-        self.log_ekle("💡 Tarayıcıda http://localhost:4040 adresini açın")
-    
-    def baglanti_kabul_et(self):
-        """Gelen bağlantıyı kabul et"""
-        try:
-            self.log_ekle("⏳ Bağlantı bekleniyor...")
-            self.baglanti, adres = self.server_socket.accept()
-            self.bagli = True
-            
-            self.log_ekle(f"✅ Bağlantı kuruldu: {adres[0]}:{adres[1]}")
-            self.durum_label.config(text="🟢 Bağlı - Konuşabilirsiniz!", fg='#2ecc71')
-            self.kes_btn.config(state='normal')
-            
-            # Ses iletimini başlat
-            self.ses_iletimi_baslat()
-            
-        except Exception as e:
-            if self.bagli:  # Sadece beklenmeyen hatalarda log
-                self.log_ekle(f"❌ Bağlantı hatası: {e}")
-    
-    def baglan(self):
-        """Belirtilen adrese bağlan"""
-        try:
-            ip = self.ip_entry.get().strip()
-            port = int(self.port_entry.get().strip())
-            
-            if not ip or not port:
-                messagebox.showwarning("Uyarı", "IP ve Port bilgilerini girin!")
-                return
-            
-            self.log_ekle(f"🔄 Bağlanılıyor: {ip}:{port}")
-            self.durum_label.config(text="🟡 Bağlanılıyor...", fg='#f39c12')
-            
-            self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.client_socket.settimeout(10)
-            self.client_socket.connect((ip, port))
-            
-            self.baglanti = self.client_socket
-            self.bagli = True
-            
-            self.log_ekle(f"✅ Bağlantı başarılı!")
-            self.durum_label.config(text="🟢 Bağlı - Konuşabilirsiniz!", fg='#2ecc71')
-            
-            self.ngrok_btn.config(state='disabled')
-            self.baglan_btn.config(state='disabled')
-            self.kes_btn.config(state='normal')
-            
-            # Ses iletimini başlat
-            self.ses_iletimi_baslat()
-            
-        except socket.timeout:
-            messagebox.showerror("Zaman Aşımı", "Bağlantı zaman aşımına uğradı!\nSunucu çalışıyor mu?")
-            self.log_ekle("❌ Bağlantı zaman aşımı")
-            self.durum_label.config(text="⚪ Beklemede", fg='#ecf0f1')
-        except Exception as e:
-            messagebox.showerror("Bağlantı Hatası", f"Bağlantı kurulamadı:\n{e}")
-            self.log_ekle(f"❌ Bağlantı hatası: {e}")
-            self.durum_label.config(text="⚪ Beklemede", fg='#ecf0f1')
-    
-    def ses_iletimi_baslat(self):
-        """Ses gönderme ve alma işlemlerini başlat"""
-        self.dinleme_aktif = True
-        threading.Thread(target=self.ses_gonder, daemon=True).start()
-        threading.Thread(target=self.ses_al, daemon=True).start()
-        self.log_ekle("🎤 Ses iletimi başladı")
-    
-    def ses_gonder(self):
-        """Mikrofon sesini karşı tarafa gönder"""
-        try:
-            stream = self.audio.open(format=self.FORMAT,
-                                    channels=self.CHANNELS,
-                                    rate=self.RATE,
-                                    input=True,
-                                    frames_per_buffer=self.CHUNK)
-            
-            while self.bagli and self.dinleme_aktif:
-                data = stream.read(self.CHUNK, exception_on_overflow=False)
-                if self.baglanti:
-                    try:
-                        self.baglanti.sendall(data)
-                    except:
-                        break
-            
-            stream.stop_stream()
-            stream.close()
-            
-        except Exception as e:
-            self.log_ekle(f"❌ Ses gönderme hatası: {e}")
-    
-    def ses_al(self):
-        """Karşı taraftan gelen sesi çal"""
-        try:
-            stream = self.audio.open(format=self.FORMAT,
-                                    channels=self.CHANNELS,
-                                    rate=self.RATE,
-                                    output=True,
-                                    frames_per_buffer=self.CHUNK)
-            
-            while self.bagli and self.dinleme_aktif:
-                try:
-                    data = self.baglanti.recv(self.CHUNK)
-                    if data:
-                        stream.write(data)
-                    else:
-                        break
-                except:
-                    break
-            
-            stream.stop_stream()
-            stream.close()
-            
-        except Exception as e:
-            self.log_ekle(f"❌ Ses alma hatası: {e}")
-    
-    def baglanti_kes(self):
-        """Bağlantıyı sonlandır"""
-        self.bagli = False
-        self.dinleme_aktif = False
-        
-        if self.baglanti:
-            try:
-                self.baglanti.close()
-            except:
-                pass
-        if self.server_socket:
-            try:
-                self.server_socket.close()
-            except:
-                pass
-        if self.client_socket:
-            try:
-                self.client_socket.close()
-            except:
-                pass
-        
-        # Ngrok'u kapat
-        if self.ngrok_process:
-            self.ngrok_process.terminate()
-            self.ngrok_process = None
-            self.log_ekle("🔴 Ngrok kapatıldı")
-        
-        self.log_ekle("⚠️ Bağlantı kesildi")
-        self.durum_label.config(text="⚪ Beklemede", fg='#ecf0f1')
-        
-        self.ngrok_btn.config(state='normal')
-        self.baglan_btn.config(state='normal')
-        self.kes_btn.config(state='disabled')
-    
-    def calistir(self):
-        """Uygulamayı başlat"""
+        # Ses log alanı
+        self.log_alani = scrolledtext.ScrolledText(self.root,
+                                                  height=10,
+                                                  font=('Courier', 10),
+                                                  bg='#1a1a1a', fg='#ecf0f1',
+                                                  insertbackground='white')
+        self.log_alani.pack(fill='both', expand=True, padx=20, pady=15)
+        self.log_yaz("Uygulama başlatıldı...")
+
+        # Pencere kapatma işlemi
         self.root.protocol("WM_DELETE_WINDOW", self.kapat)
         self.root.mainloop()
     
+
+    # ---------------- YARDIMCI METOTLAR ---------------- #
+    def log_yaz(self, mesaj):
+        self.log_alani.insert(tk.END, f"[{time.strftime('%H:%M:%S')}] {mesaj}\n")
+        self.log_alani.see(tk.END)
+
+    def ayarlar_ac(self):
+        AyarlarPenceresi(self.root)
+
     def kapat(self):
-        """Uygulamayı kapat"""
-        self.baglanti_kes()
-        self.audio.terminate()
+        try:
+            if self.baglanti:
+                self.baglanti.close()
+            if self.client_socket:
+                self.client_socket.close()
+            if self.server_socket:
+                self.server_socket.close()
+            if self.ngrok_process:
+                self.ngrok_process.terminate()
+        except:
+            pass
         self.root.destroy()
+
+    # ---------------- SUNUCU ---------------- #
+    def ngrok_ile_baslat(self):
+        """Ngrok ile sunucu başlat"""
+        self.log_yaz("Ngrok ile sunucu başlatılıyor...")
+        try:
+            # Local sunucu başlat
+            self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.server_socket.bind(('0.0.0.0', 5000))
+            self.server_socket.listen(1)
+            self.log_yaz("Yerel sunucu 5000 portunda dinliyor...")
+
+            # Ngrok'u başlat
+            self.ngrok_process = subprocess.Popen(['ngrok', 'tcp', '5000'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            time.sleep(3)
+
+            # Ngrok URL’sini al
+            t = requests.get("http://127.0.0.1:4040/api/tunnels").json()
+            public_url = t['tunnels'][0]['public_url'].replace("tcp://", "")
+            host, port = public_url.split(':')
+            self.ngrok_url = (host, port)
+
+            self.log_yaz(f"Ngrok bağlantısı: {host}:{port}")
+            BaglantiPenceresi(self.root, host, port)
+
+            threading.Thread(target=self.sunucu_dinle, daemon=True).start()
+        except Exception as e:
+            messagebox.showerror("Hata", f"Sunucu başlatılamadı:\n{e}")
+            self.log_yaz(f"Hata: {e}")
+
+    def sunucu_dinle(self):
+        """Gelen bağlantıyı kabul et"""
+        self.log_yaz("Bağlantı bekleniyor...")
+        self.baglanti, addr = self.server_socket.accept()
+        self.log_yaz(f"Bağlantı kabul edildi: {addr}")
+        self.bagli = True
+        self.durum_guncelle(True)
+        threading.Thread(target=self.ses_al, daemon=True).start()
+
+    # ---------------- İSTEMCİ ---------------- #
+    def baglan(self):
+        """İstemci olarak bağlan"""
+        adres = self.ip_entry.get().strip()
+        if not adres:
+            messagebox.showwarning("Uyarı", "Bağlanılacak adresi giriniz!")
+            return
+        
+        try:
+            host, port = adres.split(':')
+            port = int(port)
+            self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.client_socket.connect((host, port))
+            self.log_yaz(f"Sunucuya bağlanıldı: {host}:{port}")
+            self.bagli = True
+            self.durum_guncelle(True)
+            
+            threading.Thread(target=self.ses_al, daemon=True).start()
+            threading.Thread(target=self.ses_gonder, daemon=True).start()
+        except Exception as e:
+            messagebox.showerror("Bağlantı Hatası", f"Sunucuya bağlanılamadı:\n{e}")
+            self.log_yaz(f"Hata: {e}")
+
+    def durum_guncelle(self, bagli):
+        if bagli:
+            self.durum_label.config(text="Durum: Bağlı ✅", fg='#2ecc71')
+        else:
+            self.durum_label.config(text="Durum: Bağlı değil ❌", fg='#e74c3c')
+
+    # ---------------- SES ---------------- #
+    def ses_al(self):
+        """Karşıdan gelen sesi çal"""
+        stream = self.audio.open(format=self.FORMAT,
+                                 channels=self.CHANNELS,
+                                 rate=self.RATE,
+                                 output=True,
+                                 frames_per_buffer=self.CHUNK)
+        soket = self.baglanti or self.client_socket
+        while self.bagli:
+            try:
+                data = soket.recv(self.CHUNK)
+                if not data:
+                    break
+                stream.write(data)
+            except:
+                break
+        stream.stop_stream()
+        stream.close()
+        self.bagli = False
+        self.durum_guncelle(False)
+        self.log_yaz("Ses alımı sonlandı.")
+
+    def ses_gonder(self):
+        """Mikrofon verisini gönder"""
+        stream = self.audio.open(format=self.FORMAT,
+                                 channels=self.CHANNELS,
+                                 rate=self.RATE,
+                                 input=True,
+                                 frames_per_buffer=self.CHUNK)
+        soket = self.baglanti or self.client_socket
+        while self.bagli:
+            try:
+                data = stream.read(self.CHUNK, exception_on_overflow=False)
+                soket.sendall(data)
+            except:
+                break
+        stream.stop_stream()
+        stream.close()
+        self.log_yaz("Ses gönderimi sonlandı.")
 
 
 if __name__ == "__main__":
-    print("=" * 60)
-    print("🎙️  SESLİ KONUŞMA UYGULAMASI - NGROK ENTEGRELİ")
-    print("=" * 60)
-    print("\n📦 Gereksinimler:")
-    print("   pip install pyaudio requests")
-    print("\n🌐 Ngrok Kurulumu:")
-    print("   1. https://ngrok.com/download")
-    print("   2. Üye olun ve auth token alın")
-    print("   3. ngrok config add-authtoken <YOUR_TOKEN>")
-    print("\n🚀 Kullanım:")
-    print("   • Sunucu: 'Ngrok ile Sunucu Başlat' butonuna tıklayın")
-    print("   • İstemci: IP ve Port girerek 'Bağlan' butonuna tıklayın")
-    print("=" * 60)
-    print()
-    try:
-        uygulama = SesliKonusmaUygulamasi()
-        uygulama.calistir()
-    except KeyboardInterrupt:
-        print("\n⚠️  Uygulama kullanıcı tarafından durduruldu")
-    except Exception as e:
-        print(f"\n❌ Kritik Hata: {e}")
-        print("\n💡 PyAudio kurulum sorunları için:")
-        print("   Windows: pip install pipwin && pipwin install pyaudio")
-        print("   Mac: brew install portaudio && pip install pyaudio")
-        print("   Linux: sudo apt-get install python3-pyaudio")
+    SesliKonusmaUygulamasi()
