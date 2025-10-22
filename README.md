@@ -23,6 +23,11 @@ Unlike traditional platforms, PulseCord lets you **host your own private voice s
 3. Others connect using the address and start talking in real time.  
 4. Once the app is closed, the connection disappears — no traces left.
 
+
+Make sure your ngrok token is configured:
+```bash
+ngrok config add-authtoken YOUR_AUTH_TOKEN
+```
 ---
 
 ## ⚙️ Installation
@@ -34,10 +39,6 @@ Unlike traditional platforms, PulseCord lets you **host your own private voice s
 
 ### Clone & Setup
 
-Make sure your ngrok token is configured:
-```bash
-ngrok config add-authtoken YOUR_AUTH_TOKEN
-```
 ```bash
 git clone https://github.com/achigo0/pulsecord.git
 cd pulsecord
