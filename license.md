@@ -29,3 +29,7 @@ In no event shall the copyright holder or any contributors be liable for any dir
 
 5. TERMINATION
 This license will terminate automatically without notice from the copyright holder if you fail to comply with any of the terms or conditions of this Agreement. Upon termination, you agree to immediately cease all use of the Software and destroy all copies, complete or partial, of the Software.
+
+<p align="center">
+  <img src="images/BANNER.jpg" alt="Preview" width="100%">
+</p>
