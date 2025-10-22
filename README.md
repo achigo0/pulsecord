@@ -2,7 +2,9 @@
 
 **PulseCord** is a real-time peer-to-peer voice communication app built in **Python**.  
 Unlike traditional platforms, PulseCord lets you **host your own private voice server** instantly — no third parties, no data collection, no compromises.  
-
+<p align="center">
+  <img src="images/BANNER.jpg" alt="Preview" width="100%">
+</p>
 ---
 
 ## 🚀 Features
